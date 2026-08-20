@@ -46,15 +46,24 @@ export interface DecodedTokenProps {
 export type AuthContextProps = {
   token: string | null;
   user: UserProps | null;
-  signIn: (email: string, password: string) => Promise<void>;
+
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<void>;
+
   signUp: (
     email: string,
     password: string,
     name: string,
     avatar?: string
   ) => Promise<void>;
+
   signOut: () => Promise<void>;
-  updateToken: (token: string) => Promise<void>;
+
+  updateToken: (
+    token: string
+  ) => Promise<void>;
 };
 
 export type ScreenWrapperProps = {
@@ -71,7 +80,8 @@ export type ResponseProps = {
   msg?: string;
 };
 
-export interface ButtonProps extends TouchableOpacityProps {
+export interface ButtonProps
+  extends TouchableOpacityProps {
   style?: ViewStyle;
   onPress?: () => void;
   loading?: boolean;
@@ -86,7 +96,7 @@ export type BackButtonProps = {
 
 export type AvatarProps = {
   size?: number;
-  uri: string | null;
+  url?: string | null;
   style?: ViewStyle;
   isGroup?: boolean;
 };
@@ -102,20 +112,25 @@ export type ConversationListItemProps = {
   item: ConversationProps;
   showDivider: boolean;
   isGroup?: boolean;
-  router: any; 
+  router: any;
 };
 
 export type ConversationProps = {
   _id: string;
+
   type: "direct" | "group";
+
   avatar: string | null;
+
   participants: {
     _id: string;
     name: string;
     avatar: string;
     email: string;
   }[];
+
   name?: string;
+
   lastMessage?: {
     _id: string;
     content: string;
@@ -124,19 +139,25 @@ export type ConversationProps = {
     attachment?: string;
     createdAt: string;
   };
+
   createdAt: string;
   updatedAt: string;
 };
 
 export type MessageProps = {
   id: string;
+
   sender: {
     id: string;
     name: string;
     avatar: string | null;
   };
+
   content: string;
+
   attachment?: string | null;
+
   isMe?: boolean;
+
   createdAt: string;
 };
