@@ -9,3 +9,6 @@ const getBaseUrl = () => {
 };
 
 export const API_URL = getBaseUrl();
+
+export const CLOUDINARY_CLOUD_NAME = "bp7adzo0";
+export const CLOUDINARY_UPLOAD_PRESEST = "images";

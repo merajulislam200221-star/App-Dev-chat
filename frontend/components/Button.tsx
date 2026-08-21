@@ -42,6 +42,6 @@ const styles = StyleSheet.create({
         height: verticalScale(56),
         justifyContent: "center",
         alignItems: "center",
-        width: '100%', // কন্টেইনারের পুরো চওড়া জায়গা নেওয়ার জন্য
+        width: '100%',
     }
 });
