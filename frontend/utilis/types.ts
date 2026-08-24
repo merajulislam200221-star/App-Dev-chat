@@ -160,4 +160,4 @@ export type MessageProps = {
   isMe?: boolean;
 
   createdAt: string;
-};
+}; 
