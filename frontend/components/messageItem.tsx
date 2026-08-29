@@ -7,6 +7,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Avatar from './Avatar';
 import Typo from './Typo';
+import moment from 'moment';
+import { Image } from "expo-image";
 const MessageItem = ({
   item,
   isDirect,
@@ -15,7 +17,13 @@ const MessageItem = ({
   isDirect?: boolean;
 }) => {
   const { user: currentUser } = useAuth();
-  const isMe = item?.sender?.id === currentUser?.id || item?.isMe;
+  const isMe = currentUser?.id == item?.sender?.id;
+
+  const formattedDate= moment(item.createdAt).isSame(moment(), "day")
+  moment(item.createdAt).format("h:mm A");
+  moment(item.createdAt).format("MMM D,:ch:mm A");
+  // console.log("message item:", item); 
+  
   return (
     <View
       style={[
@@ -24,8 +32,7 @@ const MessageItem = ({
       ]}
     >
       {!isMe && !isDirect && (
-        <Avatar
-          size={30}
+        <Avatar size={30}
           url={item?.sender?.avatar || null}
           style={styles.messageAvatar}
         />
@@ -42,9 +49,17 @@ const MessageItem = ({
             {item?.sender?.name}
           </Typo>
         )}
+        {item.attachment && (
+  <Image
+    source={typeof item.attachment === "string" ? { uri: item.attachment } : item.attachment}
+    contentFit="cover"
+    style={styles.attachment}
+    transition={100}
+  />
+)}
 
         <Typo color={isMe ? colors.white : colors.neutral900} size={14}>
-          {item?.content}
+          {formattedDate}
         </Typo>
       </View>
     </View>

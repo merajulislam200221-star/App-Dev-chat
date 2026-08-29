@@ -26,10 +26,10 @@ const ConversationItem = ({
   let avatar = item.avatar;
 
   const otherParticipant = isDirect
-    ? item.participants.find(
-        (p) => p._id != currentUser?.id
-      )
-    : null;
+  ? item?.participants?.find(
+      (p: any) => p._id != currentUser?.id
+    )
+  : null;
 
   if (isDirect && otherParticipant) {
     avatar = otherParticipant?.avatar;

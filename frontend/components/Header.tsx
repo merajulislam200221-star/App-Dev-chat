@@ -6,15 +6,15 @@ import Typo from "./Typo";
 const Header = ({ title = "", leftIcon, rightIcon, style }: HeaderProps) => {
   return (
     <View style={[styles.container, style]}>
-      {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
+      {leftIcon ? <View style={styles.leftIcon}>{leftIcon}</View> : null}
 
-      {title && (
+      {title ? (
         <Typo size={22} fontWeight={"600"} style={styles.title}>
           {title}
         </Typo>
-      )}
+      ) : null}
 
-      {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
+      {rightIcon ? <View style={styles.rightIcon}>{rightIcon}</View> : null}
     </View>
   );
 };

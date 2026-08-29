@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -17,16 +18,41 @@ import Header from "@/components/Header";
 import MessageItem from "@/components/messageItem";
 import ScreenWrapper from "@/components/ScreenWrapper";
 import Typo from "@/components/Typo";
+import Loading from "@/components/Loading";
 import { colors, radius, spacingX, spacingY } from "@/constants/theme";
 import { useAuth } from "@/contexts/authContext";
 import { scale, verticalScale } from "@/utilis/styling";
-import Loading from "@/components/Loading";
 import { uploadFileToCloudinary } from "@/services/imageService";
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from "expo-image-picker";
+import { MessageProps, ResponseProps } from "@/utilis/types";
+
+import { newMessage, getMessage } from "@/socket/socketEvents";
+
+const dummyMessages = [
+  {
+    id: "msg_1",
+    name: "Alice",
+    type: "direct",
+    lastMessage: {
+      senderName: "Alice",
+      content: "Hey! Are we still on for tonight?",
+      createdAt: "2025-06-22T18:45:00Z",
+    },
+  },
+  {
+    id: "msg_2",
+    name: "Project Team",
+    type: "group",
+    lastMessage: {
+      senderName: "Sarah",
+      content: "Meeting rescheduled to 3pm tomorrow.",
+      createdAt: "2025-06-21T14:10:00Z",
+    },
+  },
+];
 
 const Conversation = () => {
   const { user: currentUser } = useAuth();
-
   const {
     id: conversationId,
     name,
@@ -38,6 +64,7 @@ const Conversation = () => {
   const [message, setMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState<{ url: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState<MessageProps[]>(dummyMessages as any);
 
   const participants = JSON.parse(
     (stringifiedParticipants as string) || "[]"
@@ -46,7 +73,7 @@ const Conversation = () => {
   let conversationAvatar = avatar;
   let isDirect = type === "direct";
   const otherParticipant = isDirect
-    ? participants.find((p: any) => p._id !== currentUser?.id)
+    ? participants?.find((p: any) => p._id !== currentUser?.id)
     : null;
 
   if (isDirect && otherParticipant) {
@@ -55,48 +82,32 @@ const Conversation = () => {
 
   let conversationName = isDirect ? otherParticipant?.name : name;
 
-  const dummyMessages = [
-    {
-      id: "msg_1",
-      name: "Alice",
-      type: "direct",
-      lastMessage: {
-        senderName: "Alice",
-        content: "Hey! Are we still on for tonight?",
-        createdAt: "2025-06-22T18:45:00Z",
-      },
-    },
-    {
-      id: "msg_2",
-      name: "Project Team",
-      type: "group",
-      lastMessage: {
-        senderName: "Sarah",
-        content: "Meeting rescheduled to 3pm tomorrow.",
-        createdAt: "2025-06-21T14:10:00Z",
-      },
-    },
-    {
-      id: "msg_3",
-      name: "Bob",
-      type: "direct",
-      lastMessage: {
-        senderName: "Bob",
-        content: "Can you send the files?",
-        createdAt: "2025-06-23T09:30:00Z",
-      },
-    },
-    {
-      id: "msg_4",
-      name: "Family Group",
-      type: "group",
-      lastMessage: {
-        senderName: "Mom",
-        content: "Don't forget dinner at 7!",
-        createdAt: "2025-06-23T12:00:00Z",
-      },
-    },
-  ];
+  const newMessageHandler = (res: ResponseProps) => {
+    setLoading(false);
+    if(res.success){
+      if(res.data.conversationId == conversationId){
+        setMessages((prev)=> [res.data as MessageProps,...prev]);
+      }
+    }else{
+      Alert.alert("Error", res.msg);
+    }
+  };
+
+  const messagesHandler = (res: ResponseProps) => {
+    if (res.success) setMessages(res.data);
+  };
+
+  useEffect(() => {
+    newMessage(newMessageHandler);
+    getMessage(messagesHandler);
+
+    getMessage({ conversationId });
+
+    return () => {
+      newMessage(newMessageHandler, true);
+      getMessage(messagesHandler, true);
+    };
+  }, []);
 
   const onPickfile = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -104,8 +115,6 @@ const Conversation = () => {
       aspect: [4, 3],
       quality: 0.5,
     });
-
-    console.log(result);
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setSelectedFile({ url: result.assets[0].uri });
@@ -128,13 +137,27 @@ const Conversation = () => {
           attachment = uploadResult.data;
         } else {
           setLoading(false);
-          Alert.alert("Error", "could not send the image!");
+          Alert.alert("Error", "Could not send the image!");
+          return;
         }
       }
-      console.log('attachment:', attachment);
+
+      newMessage({
+        conversationId,
+        sender: {
+          id: currentUser?.id,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+        },
+        content: message.trim(),
+        attachment,
+      });
+
+      setMessage("");
+      setSelectedFile(null);
     } catch (error) {
       console.log("Error sending message: ", error);
-      Alert.alert("Error", "failed to send message");
+      Alert.alert("Error", "Failed to send message");
     } finally {
       setLoading(false);
     }
@@ -171,11 +194,11 @@ const Conversation = () => {
             </TouchableOpacity>
           }
         />
-        
+
         {/* Messages */}
         <View style={styles.content}>
           <FlatList
-            data={dummyMessages}
+            data={messages}
             inverted={true}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.messageContent}
@@ -184,9 +207,8 @@ const Conversation = () => {
             )}
             keyExtractor={(item) => item.id}
           />
-          
+
           <View style={styles.footer}>
-            {/* Note: Ensure your custom input component is used correctly here */}
             <View style={styles.inputContainer}>
               <TouchableOpacity style={styles.inputIcon} onPress={onPickfile}>
                 <Icons.Plus
@@ -201,19 +223,27 @@ const Conversation = () => {
                   />
                 )}
               </TouchableOpacity>
+
+              <TextInput
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Type a message..."
+                placeholderTextColor={colors.neutral400}
+                style={styles.input}
+              />
             </View>
 
             <View style={styles.inputRightIcon}>
               <TouchableOpacity style={styles.inputIcon} onPress={onSend}>
                 {loading ? (
-          <Loading size="small" color={colors.black} />
-              ) : (
-           <Icons.PaperPlaneTilt
-            color={colors.black}
-            weight="fill"
-            size={verticalScale(22)}
-             />
-              )}
+                  <Loading size="small" color={colors.black} />
+                ) : (
+                  <Icons.PaperPlaneTilt
+                    color={colors.black}
+                    weight="fill"
+                    size={verticalScale(22)}
+                  />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -239,21 +269,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacingX._12,
   },
-  inputRightIcon: {
-    position: "absolute",
-    right: scale(10),
-    top: verticalScale(15),
-    paddingLeft: spacingX._12,
-    borderLeftWidth: 1.5,
-    borderLeftColor: colors.neutral300,
-  },
-  selectedFile: {
-    position: "absolute",
-    height: verticalScale(38),
-    width: verticalScale(38),
-    borderRadius: radius.full,
-    alignSelf: "center",
-  },
   content: {
     flex: 1,
     backgroundColor: colors.white,
@@ -263,26 +278,45 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: spacingX._15,
   },
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: spacingY._7,
+    paddingBottom: verticalScale(22),
+  },
+  inputContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral100,
+    borderRadius: radius.full,
+    paddingHorizontal: spacingX._10,
+    paddingVertical: verticalScale(5),
+  },
+  input: {
+    flex: 1,
+    marginLeft: spacingX._10,
+    fontSize: verticalScale(16),
+    color: colors.black,
+  },
   inputIcon: {
     backgroundColor: colors.primary,
     borderRadius: radius.full,
     padding: 8,
   },
-  inputContainer: {
-    position: 'relative',
+  inputRightIcon: {
+    marginLeft: spacingX._10,
   },
-  footer: {
-    paddingTop: spacingY._7,
-    paddingBottom: verticalScale(22),
+  selectedFile: {
+    position: "absolute",
+    height: verticalScale(38),
+    width: verticalScale(38),
+    borderRadius: radius.full,
+    alignSelf: "center",
   },
   messageContent: {
     paddingTop: spacingY._20,
     paddingBottom: spacingY._10,
     gap: spacingY._12,
-  },
-  plusIcon: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.full,
-    padding: 8,
   },
 });
