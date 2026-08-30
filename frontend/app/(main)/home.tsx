@@ -3,6 +3,7 @@ import ConversationItem from "@/components/ConversationItem";
 import Loading from "@/components/Loading";
 import ScreenWrapper from "@/components/ScreenWrapper";
 import Typo from "@/components/Typo";
+import Avatar from "@/components/Avatar";
 import { colors, radius, spacingX, spacingY } from "@/constants/theme";
 import { useAuth } from "@/contexts/authContext";
 import {
@@ -10,13 +11,14 @@ import {
   newConversation,
   newMessage,
 } from "@/socket/socketEvents";
-import { verticalScale } from "@/utilis/styling";
+import { scale, verticalScale } from "@/utilis/styling";
 import { useRouter } from "expo-router";
 import * as Icons from "phosphor-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -32,6 +34,7 @@ const Home = () => {
   const router = useRouter();
 
   const [selectedTab, setSelectedTab] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [conversations, setConversations] = useState<any[]>([]);
 
@@ -57,15 +60,15 @@ const Home = () => {
   };
 
   const newMessageHandler = (res: ResponseProps) => {
-    if (res.success) {
-      let conversationId = res.data.conversationId;
+    if (res.success && res.data) {
+      const conversationId = res.data.conversationId;
       setConversations((prev) => {
-        let updatedConversations = prev.map((item) => {
-          if (item._id == conversationId) item.lastMessage = res.data;
+        return prev.map((item) => {
+          if (item._id == conversationId) {
+            return { ...item, lastMessage: res.data };
+          }
           return item;
         });
-
-        return updatedConversations;
       });
     }
   };
@@ -106,127 +109,249 @@ const Home = () => {
       return new Date(bDate).getTime() - new Date(aDate).getTime();
     });
 
+  // Apply search query filter
+  const filterBySearch = (list: any[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter((item: any) => {
+      if (item.type === "group") {
+        return item.name?.toLowerCase().includes(q);
+      }
+      // For direct chats, search other participant's name or email
+      const other = item.participants?.find((p: any) => (p._id || p.id) !== currentUser?.id);
+      return (
+        other?.name?.toLowerCase().includes(q) ||
+        other?.email?.toLowerCase().includes(q) ||
+        item.lastMessage?.content?.toLowerCase().includes(q)
+      );
+    });
+  };
+
+  const filteredDirect = filterBySearch(directConversations);
+  const filteredGroups = filterBySearch(groupConversations);
+
   return (
     <ScreenWrapper showPattern={true} bgOpacity={0.4}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Typo
-              color={colors.neutral200}
-              size={19}
-              textProps={{ numberOfLines: 1 }}
-            >
-              Welcome back,{" "}
-              <Typo
-                size={20}
-                color={colors.white}
-                fontWeight="800"
-              >
-                {currentUser?.name || "User"} 🫡
+          <View style={styles.headerProfile}>
+            <Avatar
+              url={currentUser?.avatar || ""}
+              size={46}
+            />
+            <View style={{ marginLeft: spacingX._10, flex: 1 }}>
+              <Typo color={colors.neutral300} size={13} fontWeight="500">
+                Welcome back 👋
               </Typo>
-            </Typo>
+              <Typo size={19} color={colors.white} fontWeight="700" textProps={{ numberOfLines: 1 }}>
+                {currentUser?.name || "User"}
+              </Typo>
+            </View>
           </View>
 
           <TouchableOpacity
             style={styles.settingIcon}
             onPress={() => router.push("/(main)/profileModal")}
+            activeOpacity={0.7}
           >
             <Icons.GearSix
               color={colors.white}
               weight="fill"
-              size={verticalScale(22)}
+              size={verticalScale(20)}
             />
           </TouchableOpacity>
         </View>
 
-        {/* Content */}
+        {/* Content Sheet */}
         <View style={styles.content}>
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <Icons.MagnifyingGlass
+              size={18}
+              color={colors.neutral500}
+              weight="bold"
+            />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search chats, contacts, groups..."
+              placeholderTextColor={colors.neutral400}
+              style={styles.searchInput}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Icons.XCircle size={18} color={colors.neutral500} weight="fill" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Segmented Tabs */}
+          <View style={styles.tabsContainer}>
+            <TouchableOpacity
+              onPress={() => setSelectedTab(0)}
+              style={[
+                styles.tabStyle,
+                selectedTab === 0 && styles.activeTabStyle,
+              ]}
+              activeOpacity={0.8}
+            >
+              <Icons.ChatCircle
+                size={16}
+                color={selectedTab === 0 ? colors.black : colors.neutral600}
+                weight={selectedTab === 0 ? "fill" : "regular"}
+              />
+              <Typo
+                fontWeight={selectedTab === 0 ? "700" : "500"}
+                size={14}
+                color={selectedTab === 0 ? colors.black : colors.neutral700}
+              >
+                Direct
+              </Typo>
+              {directConversations.length > 0 && (
+                <View style={[styles.badge, selectedTab === 0 ? styles.badgeActive : styles.badgeInactive]}>
+                  <Typo size={11} fontWeight="700" color={selectedTab === 0 ? colors.black : colors.neutral700}>
+                    {directConversations.length}
+                  </Typo>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setSelectedTab(1)}
+              style={[
+                styles.tabStyle,
+                selectedTab === 1 && styles.activeTabStyle,
+              ]}
+              activeOpacity={0.8}
+            >
+              <Icons.Users
+                size={16}
+                color={selectedTab === 1 ? colors.black : colors.neutral600}
+                weight={selectedTab === 1 ? "fill" : "regular"}
+              />
+              <Typo
+                fontWeight={selectedTab === 1 ? "700" : "500"}
+                size={14}
+                color={selectedTab === 1 ? colors.black : colors.neutral700}
+              >
+                Groups
+              </Typo>
+              {groupConversations.length > 0 && (
+                <View style={[styles.badge, selectedTab === 1 ? styles.badgeActive : styles.badgeInactive]}>
+                  <Typo size={11} fontWeight="700" color={selectedTab === 1 ? colors.black : colors.neutral700}>
+                    {groupConversations.length}
+                  </Typo>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Conversation List */}
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              paddingVertical: spacingY._20,
+              paddingBottom: verticalScale(100),
             }}
           >
-            {/* Tabs */}
-            <View style={styles.navBar}>
-              <View style={styles.tabs}>
-                <TouchableOpacity
-                  onPress={() => setSelectedTab(0)}
-                  style={[
-                    styles.tabStyle,
-                    selectedTab === 0 && styles.activeTabStyle,
-                  ]}
-                >
-                  <Typo color={selectedTab === 0 ? colors.black : colors.neutral700}>
-                    Direct Messages
-                  </Typo>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setSelectedTab(1)}
-                  style={[
-                    styles.tabStyle,
-                    selectedTab === 1 && styles.activeTabStyle,
-                  ]}
-                >
-                  <Typo color={selectedTab === 1 ? colors.black : colors.neutral700}>
-                    Groups
-                  </Typo>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Conversation List */}
             {loading ? (
-              <View style={{ marginTop: spacingY._20 }}>
+              <View style={{ marginTop: spacingY._30 }}>
                 <Loading />
               </View>
             ) : (
               <View style={styles.conversationList}>
-                {selectedTab === 0 &&
-                  directConversations.map((item: any, index: number) => (
-                    <ConversationItem
-                      item={item}
-                      key={item._id || index}
-                      router={router}
-                      showDivider={directConversations.length !== index + 1}
-                    />
-                  ))}
+                {selectedTab === 0 && (
+                  <>
+                    {filteredDirect.map((item: any, index: number) => (
+                      <ConversationItem
+                        item={item}
+                        key={item._id || index}
+                        router={router}
+                        showDivider={filteredDirect.length !== index + 1}
+                      />
+                    ))}
 
-                {selectedTab === 1 &&
-                  groupConversations.map((item: any, index: number) => (
-                    <ConversationItem
-                      item={item}
-                      key={item._id || index}
-                      router={router}
-                      showDivider={groupConversations.length !== index + 1}
-                    />
-                  ))}
+                    {filteredDirect.length === 0 && (
+                      <View style={styles.emptyState}>
+                        <Icons.ChatCircleDots size={48} color={colors.neutral300} weight="duotone" />
+                        <Typo size={16} fontWeight="600" color={colors.neutral800} style={{ marginTop: 12 }}>
+                          {searchQuery ? "No matching conversations" : "No direct messages yet"}
+                        </Typo>
+                        <Typo size={13} color={colors.neutral500} style={{ marginTop: 4, textAlign: "center" }}>
+                          {searchQuery
+                            ? "Try searching with a different term."
+                            : "Start a conversation with friends or colleagues."}
+                        </Typo>
+                        {!searchQuery && (
+                          <TouchableOpacity
+                            style={styles.emptyActionBtn}
+                            onPress={() =>
+                              router.push({
+                                pathname: "/(main)/newConversationModal",
+                                params: { isGroup: 0 },
+                              })
+                            }
+                          >
+                            <Icons.Plus size={16} color={colors.black} weight="bold" />
+                            <Typo size={14} fontWeight="700" color={colors.black}>
+                              New Message
+                            </Typo>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {selectedTab === 1 && (
+                  <>
+                    {filteredGroups.map((item: any, index: number) => (
+                      <ConversationItem
+                        item={item}
+                        key={item._id || index}
+                        router={router}
+                        showDivider={filteredGroups.length !== index + 1}
+                      />
+                    ))}
+
+                    {filteredGroups.length === 0 && (
+                      <View style={styles.emptyState}>
+                        <Icons.UsersThree size={48} color={colors.neutral300} weight="duotone" />
+                        <Typo size={16} fontWeight="600" color={colors.neutral800} style={{ marginTop: 12 }}>
+                          {searchQuery ? "No matching groups" : "No groups joined yet"}
+                        </Typo>
+                        <Typo size={13} color={colors.neutral500} style={{ marginTop: 4, textAlign: "center" }}>
+                          {searchQuery
+                            ? "Try searching with a different group name."
+                            : "Create a group chat to talk with multiple friends at once."}
+                        </Typo>
+                        {!searchQuery && (
+                          <TouchableOpacity
+                            style={styles.emptyActionBtn}
+                            onPress={() =>
+                              router.push({
+                                pathname: "/(main)/newConversationModal",
+                                params: { isGroup: 1 },
+                              })
+                            }
+                          >
+                            <Icons.UserPlus size={16} color={colors.black} weight="bold" />
+                            <Typo size={14} fontWeight="700" color={colors.black}>
+                              Create Group
+                            </Typo>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </>
+                )}
               </View>
             )}
-
-            {/* Empty States */}
-            {!loading &&
-              selectedTab === 0 &&
-              directConversations.length === 0 && (
-                <Typo style={{ textAlign: "center", marginTop: spacingY._20 }}>
-                  You don't have any messages
-                </Typo>
-              )}
-
-            {!loading &&
-              selectedTab === 1 &&
-              groupConversations.length === 0 && (
-                <Typo style={{ textAlign: "center", marginTop: spacingY._20 }}>
-                  You haven't joined any groups yet
-                </Typo>
-              )}
           </ScrollView>
         </View>
       </View>
 
-      {/* Floating Plus Button */}
+      {/* Floating Action Button */}
       <Button
         style={styles.floatingButton}
         onPress={() => {
@@ -255,7 +380,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacingX._20,
+    paddingTop: spacingY._7,
+    paddingBottom: spacingY._15,
+  },
+  headerProfile: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  settingIcon: {
+    padding: spacingY._10,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: radius.full,
   },
   content: {
     flex: 1,
@@ -265,43 +403,85 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
     overflow: "hidden",
     paddingHorizontal: spacingX._20,
+    paddingTop: spacingY._20,
   },
-  navBar: {
+  searchContainer: {
     flexDirection: "row",
-    gap: spacingX._15,
     alignItems: "center",
-    paddingHorizontal: spacingX._10,
+    backgroundColor: colors.neutral100,
+    borderRadius: radius.full,
+    paddingHorizontal: spacingX._15,
+    paddingVertical: verticalScale(9),
+    marginBottom: spacingY._12,
   },
-  tabs: {
+  searchInput: {
+    flex: 1,
+    marginLeft: spacingX._7,
+    fontSize: 14,
+    color: colors.neutral900,
+    outlineStyle: "none",
+  } as any,
+  tabsContainer: {
     flexDirection: "row",
     gap: spacingX._10,
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    marginBottom: spacingY._10,
   },
   tabStyle: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacingY._10,
-    paddingHorizontal: spacingX._20,
+    paddingHorizontal: spacingX._12,
     borderRadius: radius.full,
     backgroundColor: colors.neutral100,
+    gap: 6,
   },
   activeTabStyle: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primary,
+  },
+  badge: {
+    borderRadius: radius.full,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 2,
+  },
+  badgeActive: {
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  badgeInactive: {
+    backgroundColor: colors.neutral200,
   },
   conversationList: {
-    paddingVertical: spacingY._20,
+    paddingTop: spacingY._7,
   },
-  settingIcon: {
-    padding: spacingY._10,
-    backgroundColor: colors.neutral700,
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: verticalScale(45),
+    paddingHorizontal: spacingX._20,
+  },
+  emptyActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: spacingY._10,
+    paddingHorizontal: spacingX._15,
     borderRadius: radius.full,
+    marginTop: spacingY._15,
   },
   floatingButton: {
-    height: verticalScale(50),
-    width: verticalScale(50),
+    height: verticalScale(52),
+    width: verticalScale(52),
     borderRadius: 100,
     position: "absolute",
-    bottom: verticalScale(30),
-    right: verticalScale(30),
+    bottom: verticalScale(25),
+    right: verticalScale(25),
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
   },
-});
+});

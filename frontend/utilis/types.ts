@@ -146,6 +146,7 @@ export type ConversationProps = {
 
 export type MessageProps = {
   id: string;
+  _id?: string;
 
   sender: {
     id: string;
@@ -161,3 +162,4 @@ export type MessageProps = {
 
   createdAt: string;
 }; 
+ 

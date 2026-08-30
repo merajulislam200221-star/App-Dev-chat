@@ -1,16 +1,21 @@
 import axios from "axios";
 import { ResponseProps } from "@/utilis/types";
+import {
+  CLOUDINARY_CLOUD_NAME as DEFAULT_CLOUD_NAME,
+  CLOUDINARY_UPLOAD_PRESET as DEFAULT_UPLOAD_PRESET,
+} from "@/constants";
+import { Platform } from "react-native";
 
 const CLOUDINARY_CLOUD_NAME =
-  process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUD_NAME;
 
 const CLOUDINARY_UPLOAD_PRESET =
-  process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+  process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || DEFAULT_UPLOAD_PRESET;
 
 const CLOUDINARY_API_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 export const uploadFileToCloudinary = async (
-  file: { uri?: string } | string,
+  file: { uri?: string; blob?: Blob } | string,
   folderName: string
 ): Promise<ResponseProps> => {
   try {
@@ -30,14 +35,19 @@ export const uploadFileToCloudinary = async (
     }
 
     if (file.uri) {
-      // Ready to upload
       const formData = new FormData();
 
-      formData.append("file", {
-        uri: file.uri,
-        type: "image/jpeg",
-        name: file.uri.split("/").pop() || "file.jpg",
-      } as any);
+      if (Platform.OS === "web") {
+        const res = await fetch(file.uri);
+        const blob = await res.blob();
+        formData.append("file", blob, "image.jpg");
+      } else {
+        formData.append("file", {
+          uri: file.uri,
+          type: "image/jpeg",
+          name: file.uri.split("/").pop() || "file.jpg",
+        } as any);
+      }
 
       formData.append(
         "upload_preset",
@@ -48,12 +58,7 @@ export const uploadFileToCloudinary = async (
 
       const response = await axios.post(
         CLOUDINARY_API_URL,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
+        formData
       );
 
       return {
@@ -61,6 +66,7 @@ export const uploadFileToCloudinary = async (
         data: response?.data?.secure_url,
       };
     }
+
 
     return {
       success: true,

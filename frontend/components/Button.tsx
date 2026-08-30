@@ -9,9 +9,10 @@ interface CustomButtonProps {
     onPress?: () => void;
     children?: React.ReactNode;
     loading?: boolean;
+    disabled?: boolean;
 }
 
-const Button = ({ style, onPress, children, loading = false }: CustomButtonProps) => {
+const Button = ({ style, onPress, children, loading = false, disabled = false }: CustomButtonProps) => {
     
     if (loading) {
         return (
@@ -23,8 +24,9 @@ const Button = ({ style, onPress, children, loading = false }: CustomButtonProps
 
     return (
         <TouchableOpacity 
-            onPress={onPress} 
-            activeOpacity={0.8}
+            onPress={disabled ? undefined : onPress} 
+            activeOpacity={disabled ? 1 : 0.8}
+            disabled={disabled}
             style={[styles.button, style]}
         >
             {children}

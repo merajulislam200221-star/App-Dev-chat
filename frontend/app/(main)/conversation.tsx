@@ -25,31 +25,7 @@ import { scale, verticalScale } from "@/utilis/styling";
 import { uploadFileToCloudinary } from "@/services/imageService";
 import * as ImagePicker from "expo-image-picker";
 import { MessageProps, ResponseProps } from "@/utilis/types";
-
 import { newMessage, getMessage } from "@/socket/socketEvents";
-
-const dummyMessages = [
-  {
-    id: "msg_1",
-    name: "Alice",
-    type: "direct",
-    lastMessage: {
-      senderName: "Alice",
-      content: "Hey! Are we still on for tonight?",
-      createdAt: "2025-06-22T18:45:00Z",
-    },
-  },
-  {
-    id: "msg_2",
-    name: "Project Team",
-    type: "group",
-    lastMessage: {
-      senderName: "Sarah",
-      content: "Meeting rescheduled to 3pm tomorrow.",
-      createdAt: "2025-06-21T14:10:00Z",
-    },
-  },
-];
 
 const Conversation = () => {
   const { user: currentUser } = useAuth();
@@ -64,37 +40,55 @@ const Conversation = () => {
   const [message, setMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState<{ url: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<MessageProps[]>(dummyMessages as any);
+  const [messages, setMessages] = useState<MessageProps[]>([]);
 
-  const participants = JSON.parse(
-    (stringifiedParticipants as string) || "[]"
-  );
-
-  let conversationAvatar = avatar;
-  let isDirect = type === "direct";
-  const otherParticipant = isDirect
-    ? participants?.find((p: any) => p._id !== currentUser?.id)
-    : null;
-
-  if (isDirect && otherParticipant) {
-    conversationAvatar = otherParticipant.avatar;
+  let participants: any[] = [];
+  try {
+    participants = JSON.parse(
+      (stringifiedParticipants as string) || "[]"
+    );
+  } catch {
+    participants = [];
   }
 
-  let conversationName = isDirect ? otherParticipant?.name : name;
+  const isGroup = type === "group";
+  const isDirect = !isGroup;
+
+  const otherParticipant = isDirect
+    ? participants?.find((p: any) => (p._id || p.id) !== currentUser?.id)
+    : null;
+
+  const conversationAvatar = isDirect
+    ? otherParticipant?.avatar || avatar || ""
+    : avatar || "";
+
+  const conversationName = isDirect
+    ? otherParticipant?.name || name || "Chat"
+    : name || "Group Chat";
+
+  const memberSubtitle = isGroup
+    ? `${participants.length > 0 ? participants.length : 2} members`
+    : otherParticipant?.email || "Direct Message";
 
   const newMessageHandler = (res: ResponseProps) => {
     setLoading(false);
-    if(res.success){
-      if(res.data.conversationId == conversationId){
-        setMessages((prev)=> [res.data as MessageProps,...prev]);
+    if (res.success && res.data) {
+      if (res.data.conversationId == conversationId) {
+        setMessages((prev) => {
+          const alreadyExists = prev.some((m) => m.id === res.data.id || m.id === res.data._id);
+          if (alreadyExists) return prev;
+          return [res.data as MessageProps, ...prev];
+        });
       }
-    }else{
-      Alert.alert("Error", res.msg);
+    } else if (!res.success) {
+      Alert.alert("Error", res.msg || "Failed to deliver message");
     }
   };
 
   const messagesHandler = (res: ResponseProps) => {
-    if (res.success) setMessages(res.data);
+    if (res.success && Array.isArray(res.data)) {
+      setMessages(res.data);
+    }
   };
 
   useEffect(() => {
@@ -107,13 +101,13 @@ const Conversation = () => {
       newMessage(newMessageHandler, true);
       getMessage(messagesHandler, true);
     };
-  }, []);
+  }, [conversationId]);
 
   const onPickfile = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       aspect: [4, 3],
-      quality: 0.5,
+      quality: 0.6,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -122,7 +116,8 @@ const Conversation = () => {
   };
 
   const onSend = async () => {
-    if (!message.trim() && !selectedFile) return;
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage && !selectedFile) return;
     if (!currentUser) return;
 
     setLoading(true);
@@ -145,11 +140,11 @@ const Conversation = () => {
       newMessage({
         conversationId,
         sender: {
-          id: currentUser?.id,
+          id: currentUser.id,
           name: currentUser.name,
           avatar: currentUser.avatar,
         },
-        content: message.trim(),
+        content: trimmedMessage,
         attachment,
       });
 
@@ -163,6 +158,15 @@ const Conversation = () => {
     }
   };
 
+  const handleKeyPress = (e: any) => {
+    if (Platform.OS === "web" && e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  const canSend = message.trim().length > 0 || selectedFile !== null;
+
   return (
     <ScreenWrapper showPattern={true} bgOpacity={0.5}>
       <KeyboardAvoidingView
@@ -173,79 +177,122 @@ const Conversation = () => {
         <Header
           style={styles.header}
           leftIcon={
-            <View style={styles.headerleft}>
-              <BackButton />
+            <View style={styles.headerLeft}>
+              <BackButton iconSize={24} />
               <Avatar
-                size={40}
+                size={42}
                 url={conversationAvatar as string}
-                isGroup={type === "group"}
+                isGroup={isGroup}
               />
-              <Typo color={colors.white} fontWeight={"500"} size={22}>
-                {conversationName}
-              </Typo>
+              <View style={{ marginLeft: spacingX._7 }}>
+                <Typo color={colors.white} fontWeight="700" size={18} textProps={{ numberOfLines: 1 }}>
+                  {conversationName}
+                </Typo>
+                <Typo color="rgba(255,255,255,0.7)" size={12} textProps={{ numberOfLines: 1 }}>
+                  {memberSubtitle}
+                </Typo>
+              </View>
             </View>
-          }
-          rightIcon={
-            <TouchableOpacity style={{ marginBottom: verticalScale(7) }}>
-              <Icons.DotsThreeOutlineVertical
-                weight="fill"
-                color={colors.white}
-              />
-            </TouchableOpacity>
           }
         />
 
-        {/* Messages */}
+        {/* Messages List */}
         <View style={styles.content}>
-          <FlatList
-            data={messages}
-            inverted={true}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.messageContent}
-            renderItem={({ item }: { item: any }) => (
-              <MessageItem item={item} isDirect={isDirect} />
-            )}
-            keyExtractor={(item) => item.id}
-          />
+          {messages.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View style={styles.waveIconContainer}>
+                {isGroup ? (
+                  <Icons.UsersThree size={48} color={colors.primaryDark} weight="duotone" />
+                ) : (
+                  <Icons.HandWaving size={48} color={colors.primaryDark} weight="duotone" />
+                )}
+              </View>
+              <Typo size={18} fontWeight="700" color={colors.neutral800} style={{ marginTop: 12 }}>
+                {isGroup ? `Welcome to ${conversationName}!` : `Say hello to ${conversationName}!`}
+              </Typo>
+              <Typo size={14} color={colors.neutral500} style={{ marginTop: 4, textAlign: "center" }}>
+                Send the first message to kick off the conversation.
+              </Typo>
+            </View>
+          ) : (
+            <FlatList
+              data={messages}
+              inverted={true}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.messageContent}
+              renderItem={({ item }: { item: any }) => (
+                <MessageItem item={item} isDirect={isDirect} />
+              )}
+              keyExtractor={(item, index) => item.id || item._id || index.toString()}
+            />
+          )}
 
+          {/* Attachment Preview Banner */}
+          {selectedFile && (
+            <View style={styles.attachmentPreviewCard}>
+              <Image source={{ uri: selectedFile.url }} style={styles.previewImage} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Typo size={13} fontWeight="600" color={colors.neutral800}>
+                  Photo ready to send
+                </Typo>
+                <Typo size={11} color={colors.neutral500}>
+                  Tap send or cancel
+                </Typo>
+              </View>
+              <TouchableOpacity
+                style={styles.cancelAttachmentBtn}
+                onPress={() => setSelectedFile(null)}
+              >
+                <Icons.X size={16} color={colors.neutral700} weight="bold" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Input Footer */}
           <View style={styles.footer}>
             <View style={styles.inputContainer}>
-              <TouchableOpacity style={styles.inputIcon} onPress={onPickfile}>
-                <Icons.Plus
-                  color={colors.black}
+              <TouchableOpacity
+                style={styles.attachButton}
+                onPress={onPickfile}
+                activeOpacity={0.7}
+              >
+                <Icons.Image
+                  color={colors.neutral700}
                   weight="bold"
                   size={verticalScale(22)}
                 />
-                {selectedFile && selectedFile.url && (
-                  <Image
-                    source={{ uri: selectedFile.url }}
-                    style={styles.selectedFile}
-                  />
-                )}
               </TouchableOpacity>
 
               <TextInput
                 value={message}
                 onChangeText={setMessage}
-                placeholder="Type a message..."
+                onKeyPress={handleKeyPress}
+                placeholder={isGroup ? `Message ${conversationName}...` : "Type a message..."}
                 placeholderTextColor={colors.neutral400}
                 style={styles.input}
+                multiline={true}
               />
             </View>
 
-            <View style={styles.inputRightIcon}>
-              <TouchableOpacity style={styles.inputIcon} onPress={onSend}>
-                {loading ? (
-                  <Loading size="small" color={colors.black} />
-                ) : (
-                  <Icons.PaperPlaneTilt
-                    color={colors.black}
-                    weight="fill"
-                    size={verticalScale(22)}
-                  />
-                )}
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                canSend && styles.sendButtonActive,
+              ]}
+              onPress={onSend}
+              disabled={loading || !canSend}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <Loading size="small" color={colors.black} />
+              ) : (
+                <Icons.PaperPlaneTilt
+                  color={canSend ? colors.black : colors.neutral400}
+                  weight="fill"
+                  size={verticalScale(20)}
+                />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -264,10 +311,11 @@ const styles = StyleSheet.create({
     paddingTop: spacingY._10,
     paddingBottom: spacingX._15,
   },
-  headerleft: {
+  headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacingX._12,
+    gap: spacingX._7,
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -278,11 +326,48 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: spacingX._15,
   },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacingX._25,
+  },
+  waveIconContainer: {
+    backgroundColor: colors.primaryLight,
+    padding: 20,
+    borderRadius: radius.full,
+  },
+  messageContent: {
+    paddingTop: spacingY._20,
+    paddingBottom: spacingY._10,
+    gap: spacingY._7,
+  },
+  attachmentPreviewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral100,
+    borderRadius: radius._15,
+    padding: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: colors.neutral200,
+  },
+  previewImage: {
+    height: 48,
+    width: 48,
+    borderRadius: radius._10,
+  },
+  cancelAttachmentBtn: {
+    backgroundColor: colors.neutral200,
+    borderRadius: radius.full,
+    padding: 6,
+  },
   footer: {
     flexDirection: "row",
     alignItems: "center",
     paddingTop: spacingY._7,
-    paddingBottom: verticalScale(22),
+    paddingBottom: verticalScale(18),
+    gap: spacingX._10,
   },
   inputContainer: {
     flex: 1,
@@ -291,32 +376,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral100,
     borderRadius: radius.full,
     paddingHorizontal: spacingX._10,
-    paddingVertical: verticalScale(5),
+    paddingVertical: verticalScale(6),
+    minHeight: verticalScale(46),
   },
   input: {
     flex: 1,
-    marginLeft: spacingX._10,
-    fontSize: verticalScale(16),
+    marginLeft: spacingX._7,
+    fontSize: 15,
     color: colors.black,
+    maxHeight: 100,
+    outlineStyle: "none",
+  } as any,
+  attachButton: {
+    padding: 6,
+    borderRadius: radius.full,
   },
-  inputIcon: {
+  sendButton: {
+    height: verticalScale(44),
+    width: verticalScale(44),
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral200,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendButtonActive: {
     backgroundColor: colors.primary,
-    borderRadius: radius.full,
-    padding: 8,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  inputRightIcon: {
-    marginLeft: spacingX._10,
-  },
-  selectedFile: {
-    position: "absolute",
-    height: verticalScale(38),
-    width: verticalScale(38),
-    borderRadius: radius.full,
-    alignSelf: "center",
-  },
-  messageContent: {
-    paddingTop: spacingY._20,
-    paddingBottom: spacingY._10,
-    gap: spacingY._12,
-  },
-});
+});

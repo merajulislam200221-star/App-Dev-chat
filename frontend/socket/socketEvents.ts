@@ -126,13 +126,14 @@ export const getMessage = (
   }
 
   if (off) {
-    socket.off("getConversation", payload);
+    socket.off("getMessage", payload);
   } else if (typeof payload === "function") {
-    socket.on("getConversation", payload);
+    socket.on("getMessage", payload);
   } else {
-    socket.emit("getConversation", payload);
+    socket.emit("getMessage", payload);
   }
 };
+
 
 export const newMessage = (
   payload: any,
